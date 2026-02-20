@@ -34,6 +34,10 @@ export default function App() {
       .then(data => setStats(data.stats || { targets: 0, urls: 0, endpoints: 0, findings: 0 }));
   }, [selectedProject]);
 
+  const endpointRequest = selectedNode?.data?.request;
+  const endpointResponse = selectedNode?.data?.response;
+  const isEndpoint = selectedNode?.data?.type === 'endpoint';
+
   return (
     <div className="app">
       <header className="header">
@@ -64,12 +68,31 @@ export default function App() {
             {selectedNode && (
               <>
                 <p className="node-type">Type: {selectedNode.data?.type || 'unknown'}</p>
-                {selectedNode.data?.type === 'endpoint' && (
+                {isEndpoint && (
                   <>
                     <h4>Status</h4>
                     <span className="status-badge">
                       {STATUS_LABELS[selectedNode.data?.status] || 'Untested'}
                     </span>
+
+                    <h4>Request</h4>
+                    <div className="detail-block">
+                      <p><strong>Method:</strong> {endpointRequest?.method || 'No request data recorded'}</p>
+                      <p><strong>URL:</strong> {endpointRequest?.url || 'No request data recorded'}</p>
+                      <p><strong>Headers:</strong></p>
+                      <pre>{endpointRequest?.headers || 'No request data recorded'}</pre>
+                      <p><strong>Body:</strong></p>
+                      <pre>{endpointRequest?.body || 'No request data recorded'}</pre>
+                    </div>
+
+                    <h4>Response</h4>
+                    <div className="detail-block">
+                      <p><strong>Status code:</strong> {endpointResponse?.statusCode ?? 'No request data recorded'}</p>
+                      <p><strong>Headers:</strong></p>
+                      <pre>{endpointResponse?.headers || 'No request data recorded'}</pre>
+                      <p><strong>Body:</strong></p>
+                      <pre>{endpointResponse?.body || 'No request data recorded'}</pre>
+                    </div>
                   </>
                 )}
               </>
