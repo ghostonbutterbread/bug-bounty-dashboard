@@ -38,12 +38,9 @@ export default function App() {
   const endpointResponse = selectedNode?.data?.response;
   const isEndpoint = selectedNode?.data?.type === 'endpoint';
 
-  const currentProject = projects.find(p => String(p.id) === String(selectedProject));
-
   return (
     <div className="app">
       <header className="header-bar">
-        <h2 className="header-title">Attack Surface</h2>
         <div className="kpi-strip">
           <div className="kpi-item"><span>Targets</span><strong>{stats.targets}</strong></div>
           <div className="kpi-item"><span>URLs</span><strong>{stats.urls}</strong></div>
@@ -52,8 +49,8 @@ export default function App() {
         </div>
       </header>
 
-      <Group direction="horizontal">
-        <Panel defaultSize={30} minSize={20} maxSize={60}>
+      <Group className="main-panels" direction="horizontal">
+        <Panel defaultSize={32} minSize={15}>
           <div className="detail-panel">
             <h3>{selectedNode?.data?.label || 'Select a node'}</h3>
             {selectedNode && (
@@ -94,7 +91,7 @@ export default function App() {
         
         <Separator />
         
-        <Panel defaultSize={70} minSize={30}>
+        <Panel defaultSize={68} minSize={15}>
           <VisualMap projectId={selectedProject} onNodeClick={setSelectedNode} />
         </Panel>
       </Group>
