@@ -243,13 +243,24 @@ export default function VisualMap({ projectId, onNodeClick }) {
       return;
     }
 
-    fetch(`/api/projects/${projectId}/visual-map`)
+    const controller = new AbortController();
+
+    fetch(`/api/projects/${projectId}/visual-map`, { signal: controller.signal })
       .then(res => res.json())
       .then(data => {
         const { newNodes, newEdges } = buildGroupedLayout(data);
         setNodes(newNodes);
         setEdges(newEdges);
+      })
+      .catch(error => {
+        if (error.name !== 'AbortError') {
+          console.error('Failed to fetch visual map:', error);
+        }
       });
+
+    return () => {
+      controller.abort();
+    };
   }, [projectId, setNodes, setEdges]);
 
   const handleNodeClick = useCallback((event, node) => {
