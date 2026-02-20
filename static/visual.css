@@ -1,0 +1,204 @@
+:root {
+  --bg: #f3f5f9;
+  --surface: #ffffff;
+  --line: #d8e1ee;
+  --text: #1f2937;
+  --muted: #64748b;
+  --accent: #0f766e;
+  --tested: #22c55e;
+  --planned: #eab308;
+  --recommended: #f97316;
+  --finding: #ef4444;
+  --untested: #94a3b8;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", Tahoma, sans-serif;
+  background: var(--bg);
+  height: 100vh;
+  overflow: hidden;
+}
+
+.visual-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.visual-header {
+  background: var(--surface);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.visual-header h2 { margin: 0; font-size: 18px; }
+
+.header-main {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kpi-strip {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.kpi-item {
+  min-width: 88px;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.kpi-label {
+  color: var(--muted);
+  display: block;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.kpi-item strong {
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.legend { display: flex; gap: 12px; flex-wrap: wrap; }
+
+.badge {
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.badge.tested { background: #dcfce7; color: #166534; }
+.badge.planned { background: #fef9c3; color: #854d0e; }
+.badge.recommended { background: #ffedd5; color: #9a3412; }
+.badge.finding { background: #fee2e2; color: #991b1b; }
+.badge.untested { background: #f1f5f9; color: #475569; }
+
+.visual-main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.graph-container {
+  flex: 1;
+  overflow: auto;
+  background:
+    radial-gradient(circle at 20% 30%, #dbeafe 0%, transparent 50%),
+    radial-gradient(circle at 80% 70%, #dcfce7 0%, transparent 50%),
+    var(--bg);
+}
+
+.detail-panel {
+  width: 370px;
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.detail-panel h3 { margin: 0 0 4px; font-size: 16px; }
+.node-meta { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+
+.checklist-section, .recommendations-section {
+  margin-bottom: 20px;
+}
+
+.checklist-section h4, .recommendations-section h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.checklist, .recommendations {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.checklist li, .recommendations li {
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.checklist li { background: var(--bg); }
+.recommendations li { background: #fff7ed; border-left: 3px solid var(--recommended); }
+
+.add-status {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.add-status select, .add-status input, .add-recommendation input {
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.add-status button, .add-recommendation button {
+  padding: 6px 12px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.add-recommendation {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.node { cursor: pointer; }
+.node circle { stroke: #fff; stroke-width: 2px; }
+.node text { font-size: 11px; fill: var(--text); }
+.node.active circle { stroke: #0f766e; stroke-width: 3px; }
+
+.link { fill: none; stroke: var(--line); stroke-width: 1.5px; }
+
+.panel-hint {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 16px;
+}
+
+@media (max-width: 980px) {
+  body { overflow: auto; }
+  .visual-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .visual-main {
+    flex-direction: column;
+    height: auto;
+  }
+  .graph-container {
+    min-height: 62vh;
+  }
+  .detail-panel {
+    width: 100%;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}

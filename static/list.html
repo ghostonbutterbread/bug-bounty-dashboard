@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>List View</title>
+  <link rel="stylesheet" href="/static/list.css" />
+</head>
+<body>
+  <div class="list-container">
+    <header class="list-header">
+      <h2>List View</h2>
+      <p>Subdomains, URLs, endpoints, test status, and findings</p>
+    </header>
+    <div class="table-wrapper">
+      <table id="dataTable">
+        <thead>
+          <tr>
+            <th>Subdomain</th>
+            <th>URL</th>
+            <th>Endpoint</th>
+            <th>Status</th>
+            <th>Findings</th>
+            <th>Updated</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <script src="/static/list.js"></script>
+</body>
+</html>

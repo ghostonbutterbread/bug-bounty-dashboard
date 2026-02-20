@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Visual Map</title>
+  <link rel="stylesheet" href="/static/visual.css" />
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+  <div class="visual-container">
+    <header class="visual-header">
+      <div class="header-main">
+        <h2>Attack Surface Visual Map</h2>
+        <div class="kpi-strip">
+          <div class="kpi-item">
+            <span class="kpi-label">Targets</span>
+            <strong id="kpiTargets">0</strong>
+          </div>
+          <div class="kpi-item">
+            <span class="kpi-label">URLs</span>
+            <strong id="kpiUrls">0</strong>
+          </div>
+          <div class="kpi-item">
+            <span class="kpi-label">Endpoints</span>
+            <strong id="kpiEndpoints">0</strong>
+          </div>
+          <div class="kpi-item">
+            <span class="kpi-label">Findings</span>
+            <strong id="kpiFindings">0</strong>
+          </div>
+        </div>
+      </div>
+      <div class="legend">
+        <span class="badge tested">✅ tested</span>
+        <span class="badge planned">📋 planned</span>
+        <span class="badge recommended">🚀 recommended</span>
+        <span class="badge finding">🔴 finding</span>
+      </div>
+    </header>
+
+    <div class="visual-main">
+      <div id="graphContainer" class="graph-container"></div>
+
+      <aside id="detailPanel" class="detail-panel">
+        <h3 id="nodeTitle">Select a node</h3>
+        <p id="nodeMeta" class="node-meta"></p>
+
+        <div class="checklist-section">
+          <h4>Checklist</h4>
+          <ul id="checklist" class="checklist"></ul>
+
+          <div class="add-status">
+            <select id="newStatusType">
+              <option value="tested">✅ tested</option>
+              <option value="planned">📋 planned</option>
+              <option value="recommended">🚀 recommended</option>
+              <option value="finding">🔴 finding</option>
+            </select>
+            <input id="newStatusTestType" placeholder="test type (XSS, IDOR)" />
+            <button id="addStatusBtn" type="button">Add Status</button>
+          </div>
+        </div>
+
+        <div class="recommendations-section">
+          <h4>Recommendations</h4>
+          <ul id="recommendations" class="recommendations"></ul>
+          <div class="add-recommendation">
+            <input id="newRecommendationText" placeholder="What should be tested next?" />
+            <input id="newRecommendationPriority" type="number" min="1" max="10" value="5" />
+            <button id="addRecommendationBtn" type="button">Add</button>
+          </div>
+        </div>
+
+        <p id="panelHint" class="panel-hint">
+          Click a subdomain, URL, or endpoint node to load details.
+        </p>
+      </aside>
+    </div>
+  </div>
+
+  <script src="/static/visual.js"></script>
+</body>
+</html>

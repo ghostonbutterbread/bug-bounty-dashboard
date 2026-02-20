@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bug Bounty Visual Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="dashboard-container">
+    <header class="dashboard-header">
+      <div>
+        <p class="header-kicker">Phase 3</p>
+        <h1 class="header-title">Visual Map Dashboard</h1>
+      </div>
+      <label class="project-picker" for="projectSelect">
+        <span>Project</span>
+        <select id="projectSelect">
+          <option value="">Select a project</option>
+        </select>
+      </label>
+    </header>
+
+    <nav class="tab-nav" aria-label="Dashboard Views">
+      <button type="button" class="tab-btn active" data-view="visual">🎯 Visual</button>
+      <button type="button" class="tab-btn" data-view="list">📊 List</button>
+      <button type="button" class="tab-btn" data-view="replay">⏪ Replay</button>
+    </nav>
+
+    <section class="iframe-container">
+      <iframe id="contentFrame" title="Dashboard content"></iframe>
+    </section>
+  </div>
+
+  <script>
+    const state = {
+      activeView: "visual",
+      projectId: "",
+      projects: [],
+    };
+
+    const refs = {
+      projectSelect: document.getElementById("projectSelect"),
+      contentFrame: document.getElementById("contentFrame"),
+      tabButtons: Array.from(document.querySelectorAll(".tab-btn")),
+    };
+
+    async function api(url) {
+      const res = await fetch(url);
+      const data = await res.json().catch(() => []);
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      return data;
+    }
+
+    function buildFrameSrc() {
+      const base = `/${state.activeView}`;
+      if (!state.projectId) return base;
+      return `${base}?project=${encodeURIComponent(state.projectId)}`;
+    }
+
+    function refreshFrame() {
+      refs.contentFrame.src = buildFrameSrc();
+    }
+
+    function setActiveView(view) {
+      state.activeView = view;
+      refs.tabButtons.forEach((btn) => btn.classList.toggle("active", btn.dataset.view === view));
+      refreshFrame();
+    }
+
+    async function loadProjects() {
+      const projects = await api("/api/projects");
+      state.projects = projects;
+      refs.projectSelect.innerHTML = '<option value="">Select a project</option>';
+      projects.forEach((project) => {
+        const option = document.createElement("option");
+        option.value = String(project.id);
+        option.textContent = project.name;
+        refs.projectSelect.appendChild(option);
+      });
+      if (!state.projectId && projects.length) {
+        state.projectId = String(projects[0].id);
+        refs.projectSelect.value = state.projectId;
+      }
+      refreshFrame();
+    }
+
+    refs.projectSelect.addEventListener("change", (event) => {
+      state.projectId = event.target.value;
+      refreshFrame();
+    });
+
+    refs.tabButtons.forEach((btn) => {
+      btn.addEventListener("click", () => setActiveView(btn.dataset.view));
+    });
+
+    loadProjects().catch(() => refreshFrame());
+  </script>
+</body>
+</html>
