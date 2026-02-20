@@ -1,0 +1,83 @@
+import { useState, useEffect } from 'react';
+import { Panel, Group, Separator } from 'react-resizable-panels';
+import VisualMap from './components/VisualMap';
+import '@xyflow/react/dist/style.css';
+import './App.css';
+
+const STATUS_LABELS = {
+  tested: '✅ Tested',
+  planned: '📋 Planned',
+  recommended: '🚀 Recommended',
+  finding: '🔴 Finding',
+  untested: '⬜ Untested',
+};
+
+export default function App() {
+  const [projects, setProjects] = useState([]);
+  const [selectedProject, setSelectedProject] = useState('');
+  const [selectedNode, setSelectedNode] = useState(null);
+  const [stats, setStats] = useState({ targets: 0, urls: 0, endpoints: 0, findings: 0 });
+
+  useEffect(() => {
+    fetch('/api/projects')
+      .then(res => res.json())
+      .then(data => {
+        setProjects(data);
+        if (data.length) setSelectedProject(String(data[0].id));
+      });
+  }, []);
+
+  useEffect(() => {
+    if (!selectedProject) return;
+    fetch(`/api/projects/${selectedProject}/visual-map`)
+      .then(res => res.json())
+      .then(data => setStats(data.stats || { targets: 0, urls: 0, endpoints: 0, findings: 0 }));
+  }, [selectedProject]);
+
+  return (
+    <div className="app">
+      <header className="header">
+        <h1>🎯 Bug Bounty Visual Map</h1>
+        <select value={selectedProject} onChange={e => setSelectedProject(e.target.value)}>
+          <option value="">Select project...</option>
+          {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      </header>
+
+      <div className="kpi-bar">
+        <div className="kpi-item"><span>Targets</span><strong>{stats.targets}</strong></div>
+        <div className="kpi-item"><span>URLs</span><strong>{stats.urls}</strong></div>
+        <div className="kpi-item"><span>Endpoints</span><strong>{stats.endpoints}</strong></div>
+        <div className="kpi-item"><span>Findings</span><strong>{stats.findings}</strong></div>
+      </div>
+
+      <Group direction="horizontal">
+        <Panel defaultSize={70} minSize={30}>
+          <VisualMap projectId={selectedProject} onNodeClick={setSelectedNode} />
+        </Panel>
+        
+        <Separator />
+        
+        <Panel defaultSize={30} minSize={20} maxSize={60}>
+          <div className="detail-panel">
+            <h3>{selectedNode?.data?.label || 'Select a node'}</h3>
+            {selectedNode && (
+              <>
+                <p className="node-type">Type: {selectedNode.data?.type || 'unknown'}</p>
+                {selectedNode.data?.type === 'endpoint' && (
+                  <>
+                    <h4>Status</h4>
+                    <span className="status-badge">
+                      {STATUS_LABELS[selectedNode.data?.status] || 'Untested'}
+                    </span>
+                  </>
+                )}
+              </>
+            )}
+            {!selectedNode && <p className="hint">Click a node to see details</p>}
+          </div>
+        </Panel>
+      </Group>
+    </div>
+  );
+}

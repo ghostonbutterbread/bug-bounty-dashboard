@@ -676,3 +676,22 @@ if __name__ == "__main__":
     with app.app_context():
         db.create_all()
     app.run(debug=True)
+
+# Serve React Visual Map (production build)
+@app.route("/react")
+def react_app():
+    try:
+        return send_from_directory("../react-visual-map/dist", "index.html")
+    except:
+        return """
+        <h2>React Visual Map Not Built</h2>
+        <p>Run: <code>cd react-visual-map && npm run build</code></p>
+        <p>Then restart this server.</p>
+        """
+
+@app.route("/react/<path:filename>")
+def react_static(filename):
+    try:
+        return send_from_directory("../react-visual-map/dist", filename)
+    except:
+        return "", 404
