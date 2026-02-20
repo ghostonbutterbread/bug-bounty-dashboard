@@ -38,29 +38,28 @@ export default function App() {
   const endpointResponse = selectedNode?.data?.response;
   const isEndpoint = selectedNode?.data?.type === 'endpoint';
 
+  const currentProject = projects.find(p => String(p.id) === String(selectedProject));
+
   return (
     <div className="app">
-      <div className="top-bar">
-        <select className="project-select" value={selectedProject} onChange={e => setSelectedProject(e.target.value)}>
-          {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-        
-        <div className="kpi-bar">
-        <div className="kpi-item"><span>Targets</span><strong>{stats.targets}</strong></div>
-        <div className="kpi-item"><span>URLs</span><strong>{stats.urls}</strong></div>
-        <div className="kpi-item"><span>Endpoints</span><strong>{stats.endpoints}</strong></div>
-        <div className="kpi-item"><span>Findings</span><strong>{stats.findings}</strong></div>
+      <header className="header-bar">
+        <h2 className="header-title">Attack Surface</h2>
+        <div className="kpi-strip">
+          <div className="kpi-item"><span>Targets</span><strong>{stats.targets}</strong></div>
+          <div className="kpi-item"><span>URLs</span><strong>{stats.urls}</strong></div>
+          <div className="kpi-item"><span>Endpoints</span><strong>{stats.endpoints}</strong></div>
+          <div className="kpi-item"><span>Findings</span><strong>{stats.findings}</strong></div>
         </div>
-      </div>
+      </header>
 
       <Group direction="horizontal">
-        <Panel defaultSize={70} minSize={30}>
+        <Panel defaultSize={65} minSize={30}>
           <VisualMap projectId={selectedProject} onNodeClick={setSelectedNode} />
         </Panel>
         
         <Separator />
         
-        <Panel defaultSize={30} minSize={20} maxSize={60}>
+        <Panel defaultSize={35} minSize={25} maxSize={70}>
           <div className="detail-panel">
             <h3>{selectedNode?.data?.label || 'Select a node'}</h3>
             {selectedNode && (
