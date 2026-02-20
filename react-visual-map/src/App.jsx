@@ -50,6 +50,12 @@ export default function App() {
       </header>
 
       <Group className="main-panels" direction="horizontal">
+        <Panel defaultSize={68} minSize={15}>
+          <VisualMap projectId={selectedProject} onNodeClick={setSelectedNode} />
+        </Panel>
+
+        <Separator />
+
         <Panel defaultSize={32} minSize={15}>
           <div className="detail-panel">
             <h3>{selectedNode?.data?.label || 'Select a node'}</h3>
@@ -87,12 +93,6 @@ export default function App() {
             )}
             {!selectedNode && <p className="hint">Click a node to see details</p>}
           </div>
-        </Panel>
-        
-        <Separator />
-        
-        <Panel defaultSize={68} minSize={15}>
-          <VisualMap projectId={selectedProject} onNodeClick={setSelectedNode} />
         </Panel>
       </Group>
     </div>
