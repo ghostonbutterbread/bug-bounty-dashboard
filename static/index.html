@@ -34,8 +34,13 @@
   </div>
 
   <script>
+    const ACTIVE_TAB_KEY = "bbd.activeView";
+    const VALID_VIEWS = new Set(["visual", "react", "list", "replay"]);
+
     const state = {
-      activeView: "visual",
+      activeView: VALID_VIEWS.has(localStorage.getItem(ACTIVE_TAB_KEY))
+        ? localStorage.getItem(ACTIVE_TAB_KEY)
+        : "visual",
       projectId: "",
       projects: [],
     };
@@ -64,7 +69,9 @@
     }
 
     function setActiveView(view) {
+      if (!VALID_VIEWS.has(view)) return;
       state.activeView = view;
+      localStorage.setItem(ACTIVE_TAB_KEY, view);
       refs.tabButtons.forEach((btn) => btn.classList.toggle("active", btn.dataset.view === view));
       refreshFrame();
     }
@@ -94,6 +101,8 @@
     refs.tabButtons.forEach((btn) => {
       btn.addEventListener("click", () => setActiveView(btn.dataset.view));
     });
+
+    setActiveView(state.activeView);
 
     loadProjects().catch(() => refreshFrame());
   </script>

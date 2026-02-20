@@ -169,11 +169,15 @@ function buildGroupedLayout(data) {
         newNodes.push({
           id: methodNodeId,
           data: {
+            endpointId: ep.id,
             label: ep.method,
             type: 'endpoint',
             status,
             method: ep.method,
             url: ep.url,
+            endpointNotes: ep.notes || '',
+            statuses: ep.statuses || [],
+            findings: ep.findings || [],
             request: {
               method: ep.method,
               url: ep.url,

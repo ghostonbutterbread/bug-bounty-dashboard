@@ -84,6 +84,31 @@ html, body, #root {
   font-weight: 500;
 }
 
+.status-badge.tested,
+.status-pill.tested {
+  background: #16a34a;
+}
+
+.status-badge.planned,
+.status-pill.planned {
+  background: #ca8a04;
+}
+
+.status-badge.recommended,
+.status-pill.recommended {
+  background: #ea580c;
+}
+
+.status-badge.finding,
+.status-pill.finding {
+  background: #dc2626;
+}
+
+.status-badge.untested,
+.status-pill.untested {
+  background: #475569;
+}
+
 .detail-block {
   border: 1px solid #e2e8f0;
   border-radius: 8px;
@@ -107,6 +132,36 @@ html, body, #root {
   padding: 8px;
   font-size: 12px;
   color: #0f172a;
+}
+
+.detail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-list li {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px;
+  background: #fff;
+}
+
+.detail-list li p {
+  margin: 4px 0;
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  margin-right: 6px;
 }
 
 [data-panel-group-direction="horizontal"] > [data-panel-resize-handle-id] {

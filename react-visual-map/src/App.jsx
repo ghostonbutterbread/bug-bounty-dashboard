@@ -4,13 +4,24 @@ import VisualMap from './components/VisualMap';
 import '@xyflow/react/dist/style.css';
 import './App.css';
 
-const STATUS_LABELS = {
-  tested: '✅ Tested',
-  planned: '📋 Planned',
-  recommended: '🚀 Recommended',
-  finding: '🔴 Finding',
-  untested: '⬜ Untested',
+const STATUS_META = {
+  tested: { label: '✅ Tested', kind: 'tested' },
+  planned: { label: '📋 Planned', kind: 'planned' },
+  recommended: { label: '🚀 Recommended', kind: 'recommended' },
+  finding: { label: '🔴 Finding', kind: 'finding' },
+  untested: { label: '⬜ Untested', kind: 'untested' },
 };
+
+function formatDate(value) {
+  if (!value) return 'Unknown time';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString();
+}
+
+function uniq(values) {
+  return [...new Set(values.filter(Boolean))];
+}
 
 export default function App() {
   const [projects, setProjects] = useState([]);
@@ -36,7 +47,25 @@ export default function App() {
 
   const endpointRequest = selectedNode?.data?.request;
   const endpointResponse = selectedNode?.data?.response;
+  const endpointNotes = selectedNode?.data?.endpointNotes;
+  const endpointStatuses = selectedNode?.data?.statuses || [];
+  const endpointFindings = selectedNode?.data?.findings || [];
   const isEndpoint = selectedNode?.data?.type === 'endpoint';
+  const testedTypes = uniq(
+    endpointStatuses
+      .filter(status => status.status === 'tested' || status.status === 'finding')
+      .map(status => status.test_type),
+  );
+  const plannedTypes = uniq(
+    endpointStatuses
+      .filter(status => status.status === 'planned')
+      .map(status => status.test_type),
+  );
+  const recommendedTypes = uniq(
+    endpointStatuses
+      .filter(status => status.status === 'recommended')
+      .map(status => status.test_type),
+  );
 
   return (
     <div className="app">
@@ -65,9 +94,64 @@ export default function App() {
                 {isEndpoint && (
                   <>
                     <h4>Status</h4>
-                    <span className="status-badge">
-                      {STATUS_LABELS[selectedNode.data?.status] || 'Untested'}
+                    <span className={`status-badge ${STATUS_META[selectedNode.data?.status]?.kind || 'untested'}`}>
+                      {STATUS_META[selectedNode.data?.status]?.label || '⬜ Untested'}
                     </span>
+
+                    <h4>Testing Coverage</h4>
+                    <div className="detail-block">
+                      <p><strong>Tested:</strong> {testedTypes.length ? testedTypes.join(', ') : 'No completed tests recorded'}</p>
+                      <p><strong>Planned:</strong> {plannedTypes.length ? plannedTypes.join(', ') : 'No planned tests recorded'}</p>
+                      <p><strong>Recommended:</strong> {recommendedTypes.length ? recommendedTypes.join(', ') : 'No recommendations recorded'}</p>
+                    </div>
+
+                    <h4>Findings</h4>
+                    <div className="detail-block">
+                      {endpointFindings.length > 0 ? (
+                        <ul className="detail-list">
+                          {endpointFindings.map((finding) => (
+                            <li key={finding.id}>
+                              <p>
+                                <strong>{finding.title || 'Untitled finding'}</strong>
+                                {' '}
+                                ({finding.severity || 'unknown severity'}, {finding.status || 'unknown status'})
+                              </p>
+                              <p>{finding.description || 'No description provided'}</p>
+                              <p><strong>Updated:</strong> {formatDate(finding.updated_at || finding.created_at)}</p>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p>No vulnerabilities discovered for this endpoint yet.</p>
+                      )}
+                    </div>
+
+                    <h4>Endpoint Logic / Notes</h4>
+                    <div className="detail-block">
+                      <pre>{endpointNotes || 'No endpoint logic or notes recorded.'}</pre>
+                    </div>
+
+                    <h4>Status History</h4>
+                    <div className="detail-block">
+                      {endpointStatuses.length > 0 ? (
+                        <ul className="detail-list">
+                          {endpointStatuses.map((status) => (
+                            <li key={status.id}>
+                              <p>
+                                <span className={`status-pill ${STATUS_META[status.status]?.kind || 'untested'}`}>
+                                  {STATUS_META[status.status]?.label || status.status || 'unknown'}
+                                </span>
+                                {status.test_type ? ` ${status.test_type}` : ' general'}
+                              </p>
+                              <p>{status.notes || 'No notes for this status update.'}</p>
+                              <p><strong>Updated:</strong> {formatDate(status.updated_at || status.created_at)}</p>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p>No status updates recorded.</p>
+                      )}
+                    </div>
 
                     <h4>Request</h4>
                     <div className="detail-block">
