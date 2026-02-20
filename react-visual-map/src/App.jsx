@@ -23,23 +23,36 @@ function uniq(values) {
   return [...new Set(values.filter(Boolean))];
 }
 
+function getProjectIdFromSearch() {
+  return new URLSearchParams(window.location.search).get('project') || '';
+}
+
 export default function App() {
-  const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState('');
   const [selectedNode, setSelectedNode] = useState(null);
   const [stats, setStats] = useState({ targets: 0, urls: 0, endpoints: 0, findings: 0 });
 
   useEffect(() => {
-    fetch('/api/projects')
-      .then(res => res.json())
-      .then(data => {
-        setProjects(data);
-        if (data.length) setSelectedProject(String(data[0].id));
-      });
+    const projectId = getProjectIdFromSearch();
+    if (projectId) {
+      setSelectedProject(projectId);
+    }
   }, []);
 
   useEffect(() => {
-    if (!selectedProject) return;
+    if (selectedProject) return;
+    fetch('/api/projects')
+      .then(res => res.json())
+      .then(data => {
+        if (data.length) setSelectedProject(String(data[0].id));
+      });
+  }, [selectedProject]);
+
+  useEffect(() => {
+    if (!selectedProject) {
+      setStats({ targets: 0, urls: 0, endpoints: 0, findings: 0 });
+      return;
+    }
     fetch(`/api/projects/${selectedProject}/visual-map`)
       .then(res => res.json())
       .then(data => setStats(data.stats || { targets: 0, urls: 0, endpoints: 0, findings: 0 }));
