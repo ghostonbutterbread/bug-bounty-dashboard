@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime, timezone
 
 from flask import Flask, jsonify, request, send_from_directory
@@ -667,6 +668,17 @@ def create_app():
     @app.route("/replay")
     def replay_page():
         return send_from_directory("static", "replay.html")
+
+    react_dist = os.path.join(app.root_path, "react-visual-map", "dist")
+
+    @app.route("/react")
+    @app.route("/react/")
+    def react_app():
+        return send_from_directory(react_dist, "index.html")
+
+    @app.route("/react/<path:filename>")
+    def react_static(filename):
+        return send_from_directory(react_dist, filename)
     return app
 
 
@@ -676,22 +688,3 @@ if __name__ == "__main__":
     with app.app_context():
         db.create_all()
     app.run(debug=True)
-
-# Serve React Visual Map (production build)
-@app.route("/react")
-def react_app():
-    try:
-        return send_from_directory("../react-visual-map/dist", "index.html")
-    except:
-        return """
-        <h2>React Visual Map Not Built</h2>
-        <p>Run: <code>cd react-visual-map && npm run build</code></p>
-        <p>Then restart this server.</p>
-        """
-
-@app.route("/react/<path:filename>")
-def react_static(filename):
-    try:
-        return send_from_directory("../react-visual-map/dist", filename)
-    except:
-        return "", 404
