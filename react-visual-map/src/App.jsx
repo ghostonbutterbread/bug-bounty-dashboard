@@ -40,19 +40,17 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="header">
-        <h1>🎯 Bug Bounty Visual Map</h1>
-        <select value={selectedProject} onChange={e => setSelectedProject(e.target.value)}>
-          <option value="">Select project...</option>
+      <div className="top-bar">
+        <select className="project-select" value={selectedProject} onChange={e => setSelectedProject(e.target.value)}>
           {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-      </header>
-
-      <div className="kpi-bar">
+        
+        <div className="kpi-bar">
         <div className="kpi-item"><span>Targets</span><strong>{stats.targets}</strong></div>
         <div className="kpi-item"><span>URLs</span><strong>{stats.urls}</strong></div>
         <div className="kpi-item"><span>Endpoints</span><strong>{stats.endpoints}</strong></div>
         <div className="kpi-item"><span>Findings</span><strong>{stats.findings}</strong></div>
+        </div>
       </div>
 
       <Group direction="horizontal">
