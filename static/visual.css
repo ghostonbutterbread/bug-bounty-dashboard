@@ -104,11 +104,14 @@ body {
 }
 
 .detail-panel {
-  width: 370px;
+  width: 420px;
+  min-width: 280px;
+  max-width: 70%;
   background: var(--surface);
   border-left: 1px solid var(--line);
   padding: 16px;
   overflow-y: auto;
+  resize: horizontal;
 }
 
 .detail-panel h3 { margin: 0 0 4px; font-size: 16px; }
