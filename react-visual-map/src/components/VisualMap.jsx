@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -224,10 +224,13 @@ export default function VisualMap({
   onNodeClick,
   onNodeMouseEnter,
   onNodeMouseLeave,
-  onMapMouseMove,
+  ghostTarget,
+  onGhostTargetPosition,
 }) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [ghostNodeId, setGhostNodeId] = useState('');
+  const shellRef = useRef(null);
 
   useEffect(() => {
     if (!projectId) {
@@ -307,17 +310,49 @@ export default function VisualMap({
     if (onNodeMouseLeave) onNodeMouseLeave(node);
   }, [onNodeMouseLeave]);
 
-  const handleMapMouseMove = useCallback((event) => {
-    if (!onMapMouseMove) return;
-    const bounds = event.currentTarget.getBoundingClientRect();
-    onMapMouseMove({
-      x: event.clientX - bounds.left,
-      y: event.clientY - bounds.top,
+  const findGhostNodeId = useCallback((target) => {
+    const needle = String(target || '').trim().toLowerCase();
+    if (!needle) return '';
+
+    const endpointNodes = nodes.filter((node) => node?.data?.type === 'endpoint');
+    const exact = endpointNodes.find(
+      (node) => String(node.data?.url || '').trim().toLowerCase() === needle,
+    );
+    if (exact) return exact.id;
+
+    const byPath = endpointNodes.find((node) =>
+      String(node.data?.url || '').trim().toLowerCase().includes(needle),
+    );
+    if (byPath) return byPath.id;
+
+    return '';
+  }, [nodes]);
+
+  const updateGhostScreenPosition = useCallback((nodeId) => {
+    if (!nodeId || !onGhostTargetPosition || !shellRef.current) return;
+    const nodeElement = shellRef.current.querySelector(`.react-flow__node[data-id="${nodeId}"]`);
+    if (!nodeElement) return;
+
+    const shellBounds = shellRef.current.getBoundingClientRect();
+    const nodeBounds = nodeElement.getBoundingClientRect();
+    onGhostTargetPosition({
+      x: nodeBounds.left - shellBounds.left + nodeBounds.width / 2 + 42,
+      y: nodeBounds.top - shellBounds.top + nodeBounds.height / 2 - 12,
     });
-  }, [onMapMouseMove]);
+  }, [onGhostTargetPosition]);
+
+  useEffect(() => {
+    setGhostNodeId(findGhostNodeId(ghostTarget));
+  }, [ghostTarget, findGhostNodeId]);
+
+  useEffect(() => {
+    if (!ghostNodeId) return;
+    const frame = requestAnimationFrame(() => updateGhostScreenPosition(ghostNodeId));
+    return () => cancelAnimationFrame(frame);
+  }, [ghostNodeId, nodes, updateGhostScreenPosition]);
 
   return (
-    <div className="visual-map-shell" onMouseMove={handleMapMouseMove}>
+    <div className="visual-map-shell" ref={shellRef}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -326,6 +361,7 @@ export default function VisualMap({
         onNodeClick={handleNodeClick}
         onNodeMouseEnter={handleNodeMouseEnter}
         onNodeMouseLeave={handleNodeMouseLeave}
+        onMove={() => updateGhostScreenPosition(ghostNodeId)}
         fitView
       >
         <Background color="#e2e8f0" gap={20} />
