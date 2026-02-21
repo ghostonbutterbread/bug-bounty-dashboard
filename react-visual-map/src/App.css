@@ -301,8 +301,9 @@ body,
 }
 
 .ghost-icon {
-  font-size: 35px;
-  line-height: 1;
+  width: 74px;
+  height: 74px;
+  object-fit: contain;
   animation: ghost-float 2.4s ease-in-out infinite;
   filter: drop-shadow(0 9px 12px rgba(9, 41, 71, 0.25));
 }
