@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Panel, Group, Separator } from 'react-resizable-panels';
 import VisualMap from './components/VisualMap';
 import GhostMascot from './components/GhostMascot';
@@ -43,10 +43,79 @@ function getGhostSpeech(node) {
   return '';
 }
 
+function matchSearch(endpoint, query) {
+  if (!query) return true;
+
+  const url = String(endpoint?.url || '').toLowerCase();
+  const method = String(endpoint?.method || '').toLowerCase();
+  return url.includes(query) || method.includes(query);
+}
+
+function filterMapData(rawData, { searchQuery, targetFilter, methodFilter }) {
+  if (!rawData) return null;
+
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const filteredTargets = (rawData.targets || [])
+    .filter((target) => !targetFilter || String(target.id) === String(targetFilter))
+    .map((target) => {
+      const filteredUrls = (target.urls || [])
+        .map((urlObj) => {
+          const filteredEndpoints = (urlObj.endpoints || []).filter((endpoint) => {
+            if (methodFilter !== 'ALL' && String(endpoint.method || '').toUpperCase() !== methodFilter) {
+              return false;
+            }
+
+            return matchSearch(endpoint, normalizedSearch);
+          });
+
+          return {
+            ...urlObj,
+            endpoints: filteredEndpoints,
+          };
+        })
+        .filter((urlObj) => urlObj.endpoints.length > 0);
+
+      return {
+        ...target,
+        urls: filteredUrls,
+      };
+    })
+    .filter((target) => target.urls.length > 0);
+
+  let urlsCount = 0;
+  let endpointsCount = 0;
+  let findingsCount = 0;
+
+  filteredTargets.forEach((target) => {
+    urlsCount += target.urls.length;
+    target.urls.forEach((urlObj) => {
+      endpointsCount += urlObj.endpoints.length;
+      urlObj.endpoints.forEach((endpoint) => {
+        findingsCount += (endpoint.findings || []).length;
+      });
+    });
+  });
+
+  return {
+    ...rawData,
+    targets: filteredTargets,
+    stats: {
+      targets: filteredTargets.length,
+      urls: urlsCount,
+      endpoints: endpointsCount,
+      findings: findingsCount,
+    },
+  };
+}
+
 export default function App() {
   const [selectedProject, setSelectedProject] = useState(() => getProjectIdFromSearch());
   const [selectedNode, setSelectedNode] = useState(null);
   const [stats, setStats] = useState({ targets: 0, urls: 0, endpoints: 0, findings: 0 });
+  const [mapData, setMapData] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [targetFilter, setTargetFilter] = useState('');
+  const [methodFilter, setMethodFilter] = useState('ALL');
   const [ghostPosition, setGhostPosition] = useState({ x: 120, y: 120 });
   const [ghostSpeech, setGhostSpeech] = useState('');
   const [showGhostSpeech, setShowGhostSpeech] = useState(false);
@@ -62,13 +131,69 @@ export default function App() {
 
   useEffect(() => {
     if (!selectedProject) {
+      setMapData(null);
       setStats({ targets: 0, urls: 0, endpoints: 0, findings: 0 });
+      setTargetFilter('');
+      setMethodFilter('ALL');
+      setSelectedNode(null);
       return;
     }
-    fetch(`/api/projects/${selectedProject}/visual-map`)
+
+    const controller = new AbortController();
+
+    fetch(`/api/projects/${selectedProject}/visual-map`, { signal: controller.signal })
       .then(res => res.json())
-      .then(data => setStats(data.stats || { targets: 0, urls: 0, endpoints: 0, findings: 0 }));
+      .then((data) => {
+        setMapData(data);
+        setTargetFilter('');
+        setMethodFilter('ALL');
+        setSelectedNode(null);
+      })
+      .catch((error) => {
+        if (error.name !== 'AbortError') {
+          console.error('Failed to fetch visual map:', error);
+          setMapData(null);
+        }
+      });
+
+    return () => {
+      controller.abort();
+    };
   }, [selectedProject]);
+
+  const targetOptions = useMemo(() => {
+    if (!mapData) return [];
+    return (mapData.targets || []).map((target) => ({
+      id: target.id,
+      hostname: target.hostname || `Target ${target.id}`,
+    }));
+  }, [mapData]);
+
+  const methodOptions = useMemo(() => {
+    if (!mapData) return [];
+    const methods = new Set();
+    (mapData.targets || []).forEach((target) => {
+      (target.urls || []).forEach((urlObj) => {
+        (urlObj.endpoints || []).forEach((endpoint) => {
+          if (endpoint?.method) methods.add(String(endpoint.method).toUpperCase());
+        });
+      });
+    });
+    return [...methods].sort();
+  }, [mapData]);
+
+  const filteredMapData = useMemo(
+    () => filterMapData(mapData, { searchQuery, targetFilter, methodFilter }),
+    [mapData, searchQuery, targetFilter, methodFilter],
+  );
+
+  useEffect(() => {
+    setSelectedNode(null);
+  }, [searchQuery, targetFilter, methodFilter]);
+
+  useEffect(() => {
+    setStats(filteredMapData?.stats || { targets: 0, urls: 0, endpoints: 0, findings: 0 });
+  }, [filteredMapData]);
 
   const endpointRequest = selectedNode?.data?.request;
   const endpointResponse = selectedNode?.data?.response;
@@ -114,6 +239,48 @@ export default function App() {
   return (
     <div className="app">
       <header className="header-bar">
+        <div className="header-controls">
+          <div className="field-block">
+            <label htmlFor="visual-search">Search</label>
+            <input
+              id="visual-search"
+              type="search"
+              placeholder="Filter by URL or method..."
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
+          </div>
+          <div className="field-block">
+            <label htmlFor="visual-target-filter">Subdomain</label>
+            <select
+              id="visual-target-filter"
+              value={targetFilter}
+              onChange={(event) => setTargetFilter(event.target.value)}
+            >
+              <option value="">All subdomains</option>
+              {targetOptions.map((target) => (
+                <option key={target.id} value={String(target.id)}>
+                  {target.hostname}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field-block">
+            <label htmlFor="visual-method-filter">Method</label>
+            <select
+              id="visual-method-filter"
+              value={methodFilter}
+              onChange={(event) => setMethodFilter(event.target.value)}
+            >
+              <option value="ALL">All methods</option>
+              {methodOptions.map((method) => (
+                <option key={method} value={method}>
+                  {method}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
         <div className="kpi-strip">
           <div className="kpi-item"><span>Targets</span><strong>{stats.targets}</strong></div>
           <div className="kpi-item"><span>URLs</span><strong>{stats.urls}</strong></div>
@@ -127,6 +294,7 @@ export default function App() {
           <div className="visual-map-container">
             <VisualMap
               projectId={selectedProject}
+              data={filteredMapData}
               onNodeClick={handleNodeClick}
               onNodeMouseEnter={handleNodeMouseEnter}
               onNodeMouseLeave={handleNodeMouseLeave}

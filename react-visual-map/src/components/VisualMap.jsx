@@ -220,6 +220,7 @@ function buildGroupedLayout(data) {
 
 export default function VisualMap({
   projectId,
+  data,
   onNodeClick,
   onNodeMouseEnter,
   onNodeMouseLeave,
@@ -249,25 +250,50 @@ export default function VisualMap({
       return;
     }
 
-    const controller = new AbortController();
+    if (!data) {
+      setNodes([{
+        id: 'root',
+        data: { label: 'Loading map...', type: 'root' },
+        position: { x: ROOT_X, y: ROOT_Y },
+        sourcePosition: Position.Bottom,
+        targetPosition: Position.Top,
+        style: {
+          background: '#fff',
+          border: '2px solid #0f766e',
+          borderRadius: 8,
+          padding: 10,
+          minWidth: 180,
+          textAlign: 'center',
+        },
+      }]);
+      setEdges([]);
+      return;
+    }
 
-    fetch(`/api/projects/${projectId}/visual-map`, { signal: controller.signal })
-      .then(res => res.json())
-      .then(data => {
-        const { newNodes, newEdges } = buildGroupedLayout(data);
-        setNodes(newNodes);
-        setEdges(newEdges);
-      })
-      .catch(error => {
-        if (error.name !== 'AbortError') {
-          console.error('Failed to fetch visual map:', error);
-        }
-      });
+    if (!(data.targets || []).length) {
+      setNodes([{
+        id: 'root',
+        data: { label: 'No nodes match current filters', type: 'root' },
+        position: { x: ROOT_X, y: ROOT_Y },
+        sourcePosition: Position.Bottom,
+        targetPosition: Position.Top,
+        style: {
+          background: '#fff',
+          border: '2px solid #0f766e',
+          borderRadius: 8,
+          padding: 10,
+          minWidth: 240,
+          textAlign: 'center',
+        },
+      }]);
+      setEdges([]);
+      return;
+    }
 
-    return () => {
-      controller.abort();
-    };
-  }, [projectId, setNodes, setEdges]);
+    const { newNodes, newEdges } = buildGroupedLayout(data);
+    setNodes(newNodes);
+    setEdges(newEdges);
+  }, [projectId, data, setNodes, setEdges]);
 
   const handleNodeClick = useCallback((event, node) => {
     if (onNodeClick) onNodeClick(node);
