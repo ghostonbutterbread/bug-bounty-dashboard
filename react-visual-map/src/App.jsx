@@ -28,16 +28,9 @@ function getProjectIdFromSearch() {
 }
 
 export default function App() {
-  const [selectedProject, setSelectedProject] = useState('');
+  const [selectedProject, setSelectedProject] = useState(() => getProjectIdFromSearch());
   const [selectedNode, setSelectedNode] = useState(null);
   const [stats, setStats] = useState({ targets: 0, urls: 0, endpoints: 0, findings: 0 });
-
-  useEffect(() => {
-    const projectId = getProjectIdFromSearch();
-    if (projectId) {
-      setSelectedProject(projectId);
-    }
-  }, []);
 
   useEffect(() => {
     if (selectedProject) return;
