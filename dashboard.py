@@ -1,5 +1,6 @@
 import json
 import os
+from collections import defaultdict
 from datetime import datetime, timezone
 
 from flask import Flask, jsonify, request, send_from_directory
@@ -196,6 +197,247 @@ def create_app():
                     "endpoints": len(endpoints),
                     "findings": total_findings,
                 },
+            }
+        )
+
+    @app.get("/api/search")
+    def global_search():
+        q = (request.args.get("q") or "").strip()
+        type_filter = (request.args.get("type") or "all").strip().lower()
+        status_filter = (request.args.get("status") or "all").strip().lower()
+        method_filter = (request.args.get("method") or "all").strip().upper()
+        try:
+            limit = min(max(int(request.args.get("limit", 80)), 1), 250)
+        except ValueError:
+            return jsonify({"error": "Invalid `limit`"}), 400
+
+        allowed_types = {"all", "target", "url", "endpoint", "finding"}
+        allowed_statuses = {"all", "tested", "planned", "finding", "recommended"}
+        if type_filter not in allowed_types:
+            return jsonify({"error": "Invalid `type`"}), 400
+        if status_filter not in allowed_statuses:
+            return jsonify({"error": "Invalid `status`"}), 400
+        if method_filter != "ALL" and not method_filter.isalpha():
+            return jsonify({"error": "Invalid `method`"}), 400
+
+        needle = q.lower()
+
+        def text(value):
+            return str(value or "")
+
+        def matches_query(*values):
+            if not needle:
+                return True
+            joined = " ".join(text(v).lower() for v in values)
+            return needle in joined
+
+        def include_type(result_type):
+            return type_filter in ("all", result_type)
+
+        # Pull active scope and evaluate filters in Python so context can be returned uniformly.
+        project_rows = Project.query.filter(Project.deleted_at.is_(None)).all()
+        project_by_id = {row.id: row for row in project_rows}
+
+        target_rows = Target.query.filter(Target.deleted_at.is_(None)).all()
+        targets = [row for row in target_rows if row.project_id in project_by_id]
+        target_by_id = {row.id: row for row in targets}
+
+        endpoint_rows = (
+            Endpoint.query.join(Target, Endpoint.target_id == Target.id)
+            .join(Project, Target.project_id == Project.id)
+            .filter(Target.deleted_at.is_(None))
+            .filter(Project.deleted_at.is_(None))
+            .all()
+        )
+        endpoint_by_id = {row.id: row for row in endpoint_rows}
+        endpoints_by_target_id = defaultdict(list)
+        for row in endpoint_rows:
+            endpoints_by_target_id[row.target_id].append(row)
+
+        endpoint_ids = [row.id for row in endpoint_rows]
+        status_rows = TestStatus.query.filter(TestStatus.endpoint_id.in_(endpoint_ids)).all() if endpoint_ids else []
+        statuses_by_endpoint_id = defaultdict(list)
+        for row in status_rows:
+            statuses_by_endpoint_id[row.endpoint_id].append(row.status.lower())
+
+        finding_rows = (
+            Finding.query.join(Target, Finding.target_id == Target.id)
+            .join(Project, Target.project_id == Project.id)
+            .filter(Target.deleted_at.is_(None))
+            .filter(Project.deleted_at.is_(None))
+            .all()
+        )
+        findings_by_endpoint_id = defaultdict(list)
+        findings_by_target_id = defaultdict(list)
+        for row in finding_rows:
+            findings_by_target_id[row.target_id].append(row)
+            if row.endpoint_id:
+                findings_by_endpoint_id[row.endpoint_id].append(row)
+
+        def endpoint_matches_filters(endpoint):
+            if method_filter != "ALL" and endpoint.method.upper() != method_filter:
+                return False
+            if status_filter == "all":
+                return True
+            statuses = set(statuses_by_endpoint_id.get(endpoint.id, []))
+            unresolved = any(f.status.lower() != "resolved" for f in findings_by_endpoint_id.get(endpoint.id, []))
+            if status_filter == "finding":
+                return unresolved or "finding" in statuses
+            return status_filter in statuses
+
+        target_results = []
+        if include_type("target"):
+            for target in targets:
+                project = project_by_id.get(target.project_id)
+                if not project:
+                    continue
+                target_endpoints = endpoints_by_target_id.get(target.id, [])
+                if method_filter != "ALL" and not any(ep.method.upper() == method_filter for ep in target_endpoints):
+                    continue
+                if status_filter != "all" and not any(endpoint_matches_filters(ep) for ep in target_endpoints):
+                    continue
+                if not matches_query(target.name, target.hostname, target.notes, project.name):
+                    continue
+                target_results.append(
+                    {
+                        "id": target.id,
+                        "type": "target",
+                        "name": target.name,
+                        "hostname": target.hostname,
+                        "project_id": project.id,
+                        "project_name": project.name,
+                        "context": f"{project.name} > {target.hostname}",
+                    }
+                )
+
+        endpoint_results = []
+        if include_type("endpoint"):
+            for endpoint in endpoint_rows:
+                target = target_by_id.get(endpoint.target_id)
+                if not target:
+                    continue
+                project = project_by_id.get(target.project_id)
+                if not project:
+                    continue
+                if not endpoint_matches_filters(endpoint):
+                    continue
+                if not matches_query(
+                    endpoint.url,
+                    endpoint.method,
+                    endpoint.notes,
+                    target.hostname,
+                    target.name,
+                    project.name,
+                ):
+                    continue
+                endpoint_results.append(
+                    {
+                        "id": endpoint.id,
+                        "type": "endpoint",
+                        "method": endpoint.method,
+                        "url": endpoint.url,
+                        "target_id": target.id,
+                        "target_name": target.name,
+                        "target_hostname": target.hostname,
+                        "project_id": project.id,
+                        "project_name": project.name,
+                        "context": f"{project.name} > {target.hostname} > {endpoint.method} {endpoint.url}",
+                    }
+                )
+
+        url_results = []
+        if include_type("url"):
+            grouped = defaultdict(list)
+            for endpoint in endpoint_rows:
+                grouped[(endpoint.target_id, endpoint.url)].append(endpoint)
+
+            for (target_id, url), members in grouped.items():
+                target = target_by_id.get(target_id)
+                if not target:
+                    continue
+                project = project_by_id.get(target.project_id)
+                if not project:
+                    continue
+
+                matching_members = [ep for ep in members if endpoint_matches_filters(ep)]
+                if not matching_members:
+                    continue
+                if method_filter != "ALL" and not any(ep.method.upper() == method_filter for ep in members):
+                    continue
+                if not matches_query(url, " ".join(ep.method for ep in members), target.hostname, project.name):
+                    continue
+                url_results.append(
+                    {
+                        "id": f"{target_id}:{url}",
+                        "type": "url",
+                        "url": url,
+                        "methods": sorted({ep.method.upper() for ep in members}),
+                        "target_id": target.id,
+                        "target_name": target.name,
+                        "target_hostname": target.hostname,
+                        "project_id": project.id,
+                        "project_name": project.name,
+                        "context": f"{project.name} > {target.hostname} > {url}",
+                    }
+                )
+
+        finding_results = []
+        if include_type("finding"):
+            for finding in finding_rows:
+                target = target_by_id.get(finding.target_id)
+                if not target:
+                    continue
+                project = project_by_id.get(target.project_id)
+                if not project:
+                    continue
+                endpoint = endpoint_by_id.get(finding.endpoint_id) if finding.endpoint_id else None
+                endpoint_method = endpoint.method if endpoint else None
+                endpoint_url = endpoint.url if endpoint else None
+
+                if method_filter != "ALL":
+                    if not endpoint_method or endpoint_method.upper() != method_filter:
+                        continue
+                if status_filter not in ("all", "finding"):
+                    continue
+                if not matches_query(
+                    finding.title,
+                    finding.description,
+                    finding.severity,
+                    finding.status,
+                    endpoint_method,
+                    endpoint_url,
+                    target.hostname,
+                    project.name,
+                ):
+                    continue
+                finding_results.append(
+                    {
+                        "id": finding.id,
+                        "type": "finding",
+                        "title": finding.title,
+                        "severity": finding.severity,
+                        "status": finding.status,
+                        "target_id": target.id,
+                        "target_name": target.name,
+                        "target_hostname": target.hostname,
+                        "endpoint_id": finding.endpoint_id,
+                        "endpoint_method": endpoint_method,
+                        "endpoint_url": endpoint_url,
+                        "project_id": project.id,
+                        "project_name": project.name,
+                        "context": f"{project.name} > {target.hostname} > {finding.title}",
+                    }
+                )
+
+        # Keep payload bounded but include all groups.
+        return jsonify(
+            {
+                "query": q,
+                "filters": {"type": type_filter, "status": status_filter, "method": method_filter},
+                "targets": target_results[:limit],
+                "urls": url_results[:limit],
+                "endpoints": endpoint_results[:limit],
+                "findings": finding_results[:limit],
             }
         )
 

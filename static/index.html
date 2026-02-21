@@ -13,12 +13,50 @@
         <p class="header-kicker">Phase 3</p>
         <h1 class="header-title">Visual Map Dashboard</h1>
       </div>
-      <label class="project-picker" for="projectSelect">
-        <span>Project</span>
-        <select id="projectSelect">
-          <option value="">Select a project</option>
-        </select>
-      </label>
+
+      <div class="header-controls">
+        <label class="project-picker" for="projectSelect">
+          <span>Project</span>
+          <select id="projectSelect">
+            <option value="">Select a project</option>
+          </select>
+        </label>
+
+        <div class="global-search" id="globalSearch">
+          <div class="search-input-wrap">
+            <span class="search-icon" aria-hidden="true">🔍</span>
+            <input id="globalSearchInput" type="search" placeholder="Search targets, URLs, endpoints, findings..." autocomplete="off" />
+            <kbd class="search-shortcut">Ctrl/Cmd+K</kbd>
+          </div>
+          <div class="search-filters">
+            <select id="searchTypeFilter" aria-label="Filter by type">
+              <option value="all">All types</option>
+              <option value="target">Target</option>
+              <option value="url">URL</option>
+              <option value="endpoint">Endpoint</option>
+              <option value="finding">Finding</option>
+            </select>
+            <select id="searchStatusFilter" aria-label="Filter by status">
+              <option value="all">All statuses</option>
+              <option value="tested">Tested</option>
+              <option value="planned">Planned</option>
+              <option value="finding">Finding</option>
+              <option value="recommended">Recommended</option>
+            </select>
+            <select id="searchMethodFilter" aria-label="Filter by method">
+              <option value="all">All methods</option>
+              <option value="GET">GET</option>
+              <option value="POST">POST</option>
+              <option value="PUT">PUT</option>
+              <option value="PATCH">PATCH</option>
+              <option value="DELETE">DELETE</option>
+              <option value="OPTIONS">OPTIONS</option>
+              <option value="HEAD">HEAD</option>
+            </select>
+          </div>
+          <div id="globalSearchResults" class="search-results" hidden></div>
+        </div>
+      </div>
     </header>
 
     <nav class="tab-nav" aria-label="Dashboard Views">
@@ -36,6 +74,7 @@
   <script>
     const ACTIVE_TAB_KEY = "bbd.activeView";
     const VALID_VIEWS = new Set(["visual", "react", "list", "replay"]);
+    const SEARCH_TYPES = { target: "Target", url: "URL", endpoint: "Endpoint", finding: "Finding" };
 
     const state = {
       activeView: VALID_VIEWS.has(localStorage.getItem(ACTIVE_TAB_KEY))
@@ -43,12 +82,29 @@
         : "visual",
       projectId: "",
       projects: [],
+      frameParams: {},
+      search: {
+        q: "",
+        type: "all",
+        status: "all",
+        method: "all",
+        results: [],
+        selectedIndex: -1,
+        open: false,
+        timer: null,
+      },
     };
 
     const refs = {
       projectSelect: document.getElementById("projectSelect"),
       contentFrame: document.getElementById("contentFrame"),
       tabButtons: Array.from(document.querySelectorAll(".tab-btn")),
+      globalSearch: document.getElementById("globalSearch"),
+      searchInput: document.getElementById("globalSearchInput"),
+      searchType: document.getElementById("searchTypeFilter"),
+      searchStatus: document.getElementById("searchStatusFilter"),
+      searchMethod: document.getElementById("searchMethodFilter"),
+      searchResults: document.getElementById("globalSearchResults"),
     };
 
     async function api(url) {
@@ -60,20 +116,35 @@
 
     function buildFrameSrc() {
       const base = `/${state.activeView}`;
-      if (!state.projectId) return base;
-      return `${base}?project=${encodeURIComponent(state.projectId)}`;
+      const params = new URLSearchParams();
+      if (state.projectId) params.set("project", state.projectId);
+      Object.entries(state.frameParams || {}).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && String(value) !== "") {
+          params.set(key, String(value));
+        }
+      });
+      const query = params.toString();
+      return query ? `${base}?${query}` : base;
     }
 
     function refreshFrame() {
       refs.contentFrame.src = buildFrameSrc();
     }
 
-    function setActiveView(view) {
+    function setActiveView(view, options = {}) {
       if (!VALID_VIEWS.has(view)) return;
+      if (!options.keepFrameParams) {
+        state.frameParams = {};
+      }
       state.activeView = view;
       localStorage.setItem(ACTIVE_TAB_KEY, view);
       refs.tabButtons.forEach((btn) => btn.classList.toggle("active", btn.dataset.view === view));
       refreshFrame();
+    }
+
+    function setProject(projectId) {
+      state.projectId = projectId ? String(projectId) : "";
+      refs.projectSelect.value = state.projectId;
     }
 
     async function loadProjects() {
@@ -87,19 +158,280 @@
         refs.projectSelect.appendChild(option);
       });
       if (!state.projectId && projects.length) {
-        state.projectId = String(projects[0].id);
-        refs.projectSelect.value = state.projectId;
+        setProject(projects[0].id);
       }
       refreshFrame();
     }
 
+    function escapeHtml(value) {
+      const el = document.createElement("div");
+      el.textContent = String(value ?? "");
+      return el.innerHTML;
+    }
+
+    function escapeRegExp(value) {
+      return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+
+    function highlightText(text, query) {
+      const safe = escapeHtml(text);
+      if (!query) return safe;
+      const pattern = new RegExp(`(${escapeRegExp(query)})`, "ig");
+      return safe.replace(pattern, "<mark>$1</mark>");
+    }
+
+    function searchEnabled() {
+      return state.search.q.trim() || state.search.type !== "all" || state.search.status !== "all" || state.search.method !== "all";
+    }
+
+    function openSearch() {
+      state.search.open = true;
+      refs.globalSearch.classList.add("open");
+      refs.searchResults.hidden = false;
+    }
+
+    function closeSearch() {
+      state.search.open = false;
+      state.search.selectedIndex = -1;
+      refs.globalSearch.classList.remove("open");
+      refs.searchResults.hidden = true;
+    }
+
+    function collectResults(payload) {
+      const results = [];
+
+      (payload.targets || []).forEach((item) => {
+        results.push({
+          type: "target",
+          id: item.id,
+          projectId: item.project_id,
+          targetId: item.id,
+          label: item.hostname || item.name,
+          secondary: item.name && item.name !== item.hostname ? item.name : "",
+          context: item.context,
+        });
+      });
+
+      (payload.urls || []).forEach((item) => {
+        results.push({
+          type: "url",
+          id: item.id,
+          projectId: item.project_id,
+          targetId: item.target_id,
+          url: item.url,
+          label: item.url,
+          secondary: (item.methods || []).join(", "),
+          context: item.context,
+        });
+      });
+
+      (payload.endpoints || []).forEach((item) => {
+        results.push({
+          type: "endpoint",
+          id: item.id,
+          projectId: item.project_id,
+          targetId: item.target_id,
+          endpointId: item.id,
+          label: `${item.method} ${item.url}`,
+          secondary: item.target_hostname,
+          context: item.context,
+        });
+      });
+
+      (payload.findings || []).forEach((item) => {
+        results.push({
+          type: "finding",
+          id: item.id,
+          projectId: item.project_id,
+          targetId: item.target_id,
+          endpointId: item.endpoint_id,
+          label: item.title,
+          secondary: `${item.severity} · ${item.status}`,
+          context: item.context,
+        });
+      });
+
+      return results;
+    }
+
+    function renderSearchResults() {
+      const query = state.search.q.trim();
+      const results = state.search.results;
+
+      if (!searchEnabled()) {
+        refs.searchResults.innerHTML = '<div class="search-empty">Type a query or set filters to search globally.</div>';
+        return;
+      }
+
+      if (!results.length) {
+        refs.searchResults.innerHTML = '<div class="search-empty">No matches found.</div>';
+        return;
+      }
+
+      refs.searchResults.innerHTML = `
+        <ul class="search-result-list">
+          ${results.map((item, index) => `
+            <li>
+              <button type="button" class="search-result-item ${index === state.search.selectedIndex ? "active" : ""}" data-index="${index}">
+                <span class="search-result-type">${escapeHtml(SEARCH_TYPES[item.type] || item.type)}</span>
+                <span class="search-result-label">${highlightText(item.label, query)}</span>
+                <span class="search-result-secondary">${highlightText(item.secondary || "", query)}</span>
+                <span class="search-result-context">${highlightText(item.context || "", query)}</span>
+              </button>
+            </li>
+          `).join("")}
+        </ul>
+      `;
+    }
+
+    async function runSearch() {
+      if (!searchEnabled()) {
+        state.search.results = [];
+        renderSearchResults();
+        return;
+      }
+
+      const params = new URLSearchParams({
+        q: state.search.q.trim(),
+        type: state.search.type,
+        status: state.search.status,
+        method: state.search.method,
+      });
+
+      try {
+        const payload = await api(`/api/search?${params.toString()}`);
+        state.search.results = collectResults(payload);
+        state.search.selectedIndex = state.search.results.length ? 0 : -1;
+      } catch {
+        state.search.results = [];
+        state.search.selectedIndex = -1;
+      }
+
+      renderSearchResults();
+    }
+
+    function queueSearch() {
+      clearTimeout(state.search.timer);
+      state.search.timer = setTimeout(runSearch, 120);
+    }
+
+    function navigateFromResult(result) {
+      if (!result) return;
+
+      if (result.projectId) {
+        setProject(result.projectId);
+      }
+
+      const params = { q: state.search.q.trim() };
+      let nextView = "list";
+
+      if (result.type === "target") {
+        nextView = "visual";
+        params.focus_type = "target";
+        params.focus_id = result.targetId;
+      } else if (result.type === "url") {
+        nextView = "visual";
+        params.focus_type = "url";
+        params.focus_target_id = result.targetId;
+        params.focus_url = result.url;
+      } else if (result.type === "endpoint") {
+        nextView = "list";
+        params.focus_type = "endpoint";
+        params.focus_id = result.endpointId;
+      } else if (result.type === "finding") {
+        nextView = "list";
+        params.focus_type = "finding";
+        if (result.endpointId) {
+          params.focus_id = result.endpointId;
+        } else {
+          params.focus_target_id = result.targetId;
+        }
+      }
+
+      state.frameParams = params;
+      setActiveView(nextView, { keepFrameParams: true });
+      closeSearch();
+    }
+
     refs.projectSelect.addEventListener("change", (event) => {
-      state.projectId = event.target.value;
+      setProject(event.target.value);
+      state.frameParams = {};
       refreshFrame();
     });
 
     refs.tabButtons.forEach((btn) => {
       btn.addEventListener("click", () => setActiveView(btn.dataset.view));
+    });
+
+    refs.searchInput.addEventListener("focus", () => {
+      openSearch();
+      renderSearchResults();
+    });
+
+    refs.searchInput.addEventListener("input", (event) => {
+      state.search.q = event.target.value;
+      openSearch();
+      queueSearch();
+    });
+
+    refs.searchType.addEventListener("change", (event) => {
+      state.search.type = event.target.value;
+      openSearch();
+      queueSearch();
+    });
+
+    refs.searchStatus.addEventListener("change", (event) => {
+      state.search.status = event.target.value;
+      openSearch();
+      queueSearch();
+    });
+
+    refs.searchMethod.addEventListener("change", (event) => {
+      state.search.method = event.target.value;
+      openSearch();
+      queueSearch();
+    });
+
+    refs.searchInput.addEventListener("keydown", (event) => {
+      const results = state.search.results;
+      if (!results.length && event.key !== "Escape") return;
+
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        state.search.selectedIndex = (state.search.selectedIndex + 1) % results.length;
+        renderSearchResults();
+      } else if (event.key === "ArrowUp") {
+        event.preventDefault();
+        state.search.selectedIndex = (state.search.selectedIndex - 1 + results.length) % results.length;
+        renderSearchResults();
+      } else if (event.key === "Enter") {
+        event.preventDefault();
+        navigateFromResult(results[state.search.selectedIndex >= 0 ? state.search.selectedIndex : 0]);
+      } else if (event.key === "Escape") {
+        closeSearch();
+      }
+    });
+
+    refs.searchResults.addEventListener("click", (event) => {
+      const button = event.target.closest(".search-result-item");
+      if (!button) return;
+      const index = Number(button.dataset.index);
+      navigateFromResult(state.search.results[index]);
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        openSearch();
+        refs.searchInput.focus();
+        refs.searchInput.select();
+      }
+    });
+
+    document.addEventListener("click", (event) => {
+      if (!refs.globalSearch.contains(event.target)) {
+        closeSearch();
+      }
     });
 
     setActiveView(state.activeView);

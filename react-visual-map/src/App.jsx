@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Panel, Group, Separator } from 'react-resizable-panels';
 import VisualMap from './components/VisualMap';
+import GhostMascot from './components/GhostMascot';
 import '@xyflow/react/dist/style.css';
 import './App.css';
 
@@ -27,10 +28,28 @@ function getProjectIdFromSearch() {
   return new URLSearchParams(window.location.search).get('project') || '';
 }
 
+function getGhostSpeech(node) {
+  const type = node?.data?.type;
+
+  if (type === 'root') return 'Analyzing attack surface...';
+  if (type === 'target') return `Found subdomain: ${node?.data?.label || 'unknown'}`;
+  if (type === 'url') return `Discovered endpoint: ${node?.data?.label || '/'}`;
+  if (type === 'endpoint') {
+    const method = node?.data?.method || node?.data?.label || 'request';
+    const url = node?.data?.url || '/';
+    return `Testing ${method} on ${url}`;
+  }
+
+  return '';
+}
+
 export default function App() {
   const [selectedProject, setSelectedProject] = useState(() => getProjectIdFromSearch());
   const [selectedNode, setSelectedNode] = useState(null);
   const [stats, setStats] = useState({ targets: 0, urls: 0, endpoints: 0, findings: 0 });
+  const [ghostPosition, setGhostPosition] = useState({ x: 120, y: 120 });
+  const [ghostSpeech, setGhostSpeech] = useState('');
+  const [showGhostSpeech, setShowGhostSpeech] = useState(false);
 
   useEffect(() => {
     if (selectedProject) return;
@@ -73,6 +92,25 @@ export default function App() {
       .map(status => status.test_type),
   );
 
+  const handleNodeClick = (node) => {
+    setSelectedNode(node);
+    setGhostSpeech(getGhostSpeech(node));
+    setShowGhostSpeech(true);
+  };
+
+  const handleNodeMouseEnter = (node) => {
+    setGhostSpeech(getGhostSpeech(node));
+    setShowGhostSpeech(true);
+  };
+
+  const handleNodeMouseLeave = () => {
+    setShowGhostSpeech(false);
+  };
+
+  const handleMapMouseMove = (position) => {
+    setGhostPosition(position);
+  };
+
   return (
     <div className="app">
       <header className="header-bar">
@@ -86,7 +124,21 @@ export default function App() {
 
       <Group className="main-panels" direction="horizontal">
         <Panel defaultSize={68} minSize={15}>
-          <VisualMap projectId={selectedProject} onNodeClick={setSelectedNode} />
+          <div className="visual-map-container">
+            <VisualMap
+              projectId={selectedProject}
+              onNodeClick={handleNodeClick}
+              onNodeMouseEnter={handleNodeMouseEnter}
+              onNodeMouseLeave={handleNodeMouseLeave}
+              onMapMouseMove={handleMapMouseMove}
+            />
+            <GhostMascot
+              x={ghostPosition.x}
+              y={ghostPosition.y}
+              speech={ghostSpeech}
+              showSpeech={showGhostSpeech}
+            />
+          </div>
         </Panel>
 
         <Separator />

@@ -12,20 +12,92 @@
       <h2>List View</h2>
       <p>Subdomains, URLs, endpoints, test status, and findings</p>
     </header>
-    <div class="table-wrapper">
-      <table id="dataTable">
-        <thead>
-          <tr>
-            <th>Subdomain</th>
-            <th>URL</th>
-            <th>Endpoint</th>
-            <th>Status</th>
-            <th>Findings</th>
-            <th>Updated</th>
-          </tr>
-        </thead>
-        <tbody id="tableBody"></tbody>
-      </table>
+
+    <section class="filter-bar">
+      <div class="field-block">
+        <label for="searchInput">Search</label>
+        <input id="searchInput" type="search" placeholder="Filter by URL, method, or notes..." />
+      </div>
+      <div class="field-block">
+        <label for="targetFilter">Subdomain</label>
+        <select id="targetFilter">
+          <option value="">All subdomains</option>
+        </select>
+      </div>
+      <div class="field-block">
+        <label for="endpointNavigator">Jump to endpoint</label>
+        <select id="endpointNavigator">
+          <option value="">Select an endpoint...</option>
+        </select>
+      </div>
+    </section>
+
+    <div class="list-main">
+      <div class="table-wrapper">
+        <table id="dataTable">
+          <thead>
+            <tr>
+              <th>Subdomain</th>
+              <th>URL</th>
+              <th>Endpoint</th>
+              <th>Status</th>
+              <th>Findings</th>
+              <th>Updated</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+
+      <aside class="detail-panel">
+        <h3 id="detailTitle">Select an endpoint</h3>
+        <p id="detailMeta" class="detail-meta">Choose a row or use the endpoint dropdown.</p>
+
+        <div class="detail-section">
+          <h4>Status</h4>
+          <div class="status-inline">
+            <select id="statusType">
+              <option value="tested">✅ tested</option>
+              <option value="planned">📋 planned</option>
+              <option value="recommended">🚀 recommended</option>
+              <option value="finding">🔴 finding</option>
+            </select>
+            <input id="statusTestType" type="text" placeholder="test type (XSS, IDOR)" />
+          </div>
+          <textarea id="statusNotes" rows="2" placeholder="status notes"></textarea>
+          <button id="saveStatusBtn" type="button">Update Status</button>
+        </div>
+
+        <div class="detail-section">
+          <h4>Testing Coverage</h4>
+          <ul id="coverageList" class="detail-list"></ul>
+        </div>
+
+        <div class="detail-section">
+          <h4>Findings</h4>
+          <ul id="findingsList" class="detail-list"></ul>
+        </div>
+
+        <div class="detail-section">
+          <h4>Recommendations</h4>
+          <ul id="recommendationsList" class="detail-list"></ul>
+        </div>
+
+        <div class="detail-section">
+          <h4>Notes</h4>
+          <ul id="notesList" class="detail-list"></ul>
+        </div>
+
+        <div class="detail-section">
+          <h4>History</h4>
+          <ul id="historyList" class="detail-list"></ul>
+        </div>
+
+        <div class="detail-section">
+          <h4>Request / Response</h4>
+          <pre id="requestResponseBlock" class="request-response"></pre>
+        </div>
+      </aside>
     </div>
   </div>
   <script src="/static/list.js"></script>

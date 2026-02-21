@@ -218,7 +218,13 @@ function buildGroupedLayout(data) {
   return { newNodes, newEdges };
 }
 
-export default function VisualMap({ projectId, onNodeClick }) {
+export default function VisualMap({
+  projectId,
+  onNodeClick,
+  onNodeMouseEnter,
+  onNodeMouseLeave,
+  onMapMouseMove,
+}) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
@@ -267,18 +273,39 @@ export default function VisualMap({ projectId, onNodeClick }) {
     if (onNodeClick) onNodeClick(node);
   }, [onNodeClick]);
 
+  const handleNodeMouseEnter = useCallback((event, node) => {
+    if (onNodeMouseEnter) onNodeMouseEnter(node);
+  }, [onNodeMouseEnter]);
+
+  const handleNodeMouseLeave = useCallback((event, node) => {
+    if (onNodeMouseLeave) onNodeMouseLeave(node);
+  }, [onNodeMouseLeave]);
+
+  const handleMapMouseMove = useCallback((event) => {
+    if (!onMapMouseMove) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    onMapMouseMove({
+      x: event.clientX - bounds.left,
+      y: event.clientY - bounds.top,
+    });
+  }, [onMapMouseMove]);
+
   return (
-    <ReactFlow
-      nodes={nodes}
-      edges={edges}
-      onNodesChange={onNodesChange}
-      onEdgesChange={onEdgesChange}
-      onNodeClick={handleNodeClick}
-      fitView
-    >
-      <Background color="#e2e8f0" gap={20} />
-      <Controls />
-      <MiniMap />
-    </ReactFlow>
+    <div className="visual-map-shell" onMouseMove={handleMapMouseMove}>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onNodeClick={handleNodeClick}
+        onNodeMouseEnter={handleNodeMouseEnter}
+        onNodeMouseLeave={handleNodeMouseLeave}
+        fitView
+      >
+        <Background color="#e2e8f0" gap={20} />
+        <Controls />
+        <MiniMap />
+      </ReactFlow>
+    </div>
   );
 }
