@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -220,13 +220,17 @@ function buildGroupedLayout(data) {
 
 export default function VisualMap({
   projectId,
+  data,
   onNodeClick,
   onNodeMouseEnter,
   onNodeMouseLeave,
-  onMapMouseMove,
+  ghostTarget,
+  onGhostTargetPosition,
 }) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [ghostNodeId, setGhostNodeId] = useState('');
+  const shellRef = useRef(null);
 
   useEffect(() => {
     if (!projectId) {
@@ -249,25 +253,50 @@ export default function VisualMap({
       return;
     }
 
-    const controller = new AbortController();
+    if (!data) {
+      setNodes([{
+        id: 'root',
+        data: { label: 'Loading map...', type: 'root' },
+        position: { x: ROOT_X, y: ROOT_Y },
+        sourcePosition: Position.Bottom,
+        targetPosition: Position.Top,
+        style: {
+          background: '#fff',
+          border: '2px solid #0f766e',
+          borderRadius: 8,
+          padding: 10,
+          minWidth: 180,
+          textAlign: 'center',
+        },
+      }]);
+      setEdges([]);
+      return;
+    }
 
-    fetch(`/api/projects/${projectId}/visual-map`, { signal: controller.signal })
-      .then(res => res.json())
-      .then(data => {
-        const { newNodes, newEdges } = buildGroupedLayout(data);
-        setNodes(newNodes);
-        setEdges(newEdges);
-      })
-      .catch(error => {
-        if (error.name !== 'AbortError') {
-          console.error('Failed to fetch visual map:', error);
-        }
-      });
+    if (!(data.targets || []).length) {
+      setNodes([{
+        id: 'root',
+        data: { label: 'No nodes match current filters', type: 'root' },
+        position: { x: ROOT_X, y: ROOT_Y },
+        sourcePosition: Position.Bottom,
+        targetPosition: Position.Top,
+        style: {
+          background: '#fff',
+          border: '2px solid #0f766e',
+          borderRadius: 8,
+          padding: 10,
+          minWidth: 240,
+          textAlign: 'center',
+        },
+      }]);
+      setEdges([]);
+      return;
+    }
 
-    return () => {
-      controller.abort();
-    };
-  }, [projectId, setNodes, setEdges]);
+    const { newNodes, newEdges } = buildGroupedLayout(data);
+    setNodes(newNodes);
+    setEdges(newEdges);
+  }, [projectId, data, setNodes, setEdges]);
 
   const handleNodeClick = useCallback((event, node) => {
     if (onNodeClick) onNodeClick(node);
@@ -281,17 +310,49 @@ export default function VisualMap({
     if (onNodeMouseLeave) onNodeMouseLeave(node);
   }, [onNodeMouseLeave]);
 
-  const handleMapMouseMove = useCallback((event) => {
-    if (!onMapMouseMove) return;
-    const bounds = event.currentTarget.getBoundingClientRect();
-    onMapMouseMove({
-      x: event.clientX - bounds.left,
-      y: event.clientY - bounds.top,
+  const findGhostNodeId = useCallback((target) => {
+    const needle = String(target || '').trim().toLowerCase();
+    if (!needle) return '';
+
+    const endpointNodes = nodes.filter((node) => node?.data?.type === 'endpoint');
+    const exact = endpointNodes.find(
+      (node) => String(node.data?.url || '').trim().toLowerCase() === needle,
+    );
+    if (exact) return exact.id;
+
+    const byPath = endpointNodes.find((node) =>
+      String(node.data?.url || '').trim().toLowerCase().includes(needle),
+    );
+    if (byPath) return byPath.id;
+
+    return '';
+  }, [nodes]);
+
+  const updateGhostScreenPosition = useCallback((nodeId) => {
+    if (!nodeId || !onGhostTargetPosition || !shellRef.current) return;
+    const nodeElement = shellRef.current.querySelector(`.react-flow__node[data-id="${nodeId}"]`);
+    if (!nodeElement) return;
+
+    const shellBounds = shellRef.current.getBoundingClientRect();
+    const nodeBounds = nodeElement.getBoundingClientRect();
+    onGhostTargetPosition({
+      x: nodeBounds.left - shellBounds.left + nodeBounds.width / 2 + 42,
+      y: nodeBounds.top - shellBounds.top + nodeBounds.height / 2 - 12,
     });
-  }, [onMapMouseMove]);
+  }, [onGhostTargetPosition]);
+
+  useEffect(() => {
+    setGhostNodeId(findGhostNodeId(ghostTarget));
+  }, [ghostTarget, findGhostNodeId]);
+
+  useEffect(() => {
+    if (!ghostNodeId) return;
+    const frame = requestAnimationFrame(() => updateGhostScreenPosition(ghostNodeId));
+    return () => cancelAnimationFrame(frame);
+  }, [ghostNodeId, nodes, updateGhostScreenPosition]);
 
   return (
-    <div className="visual-map-shell" onMouseMove={handleMapMouseMove}>
+    <div className="visual-map-shell" ref={shellRef}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -300,6 +361,7 @@ export default function VisualMap({
         onNodeClick={handleNodeClick}
         onNodeMouseEnter={handleNodeMouseEnter}
         onNodeMouseLeave={handleNodeMouseLeave}
+        onMove={() => updateGhostScreenPosition(ghostNodeId)}
         fitView
       >
         <Background color="#e2e8f0" gap={20} />

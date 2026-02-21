@@ -8,6 +8,8 @@ from flask import Flask, jsonify, request, send_from_directory
 from models import Activity, Endpoint, Finding, Project, Session, Target, TestStatus, Recommendation, db
 
 VALID_TEST_STATUSES = {"tested", "planned", "recommended", "finding"}
+DEFAULT_GHOST_ACTIVITY = {"activity": "Idle", "target": "", "status": "waiting"}
+GHOST_ACTIVITY_PATH = os.path.expanduser("~/workspace/ghost_activity.json")
 
 
 def create_app():
@@ -43,6 +45,47 @@ def create_app():
     def normalize_test_status(raw_status):
         status = (raw_status or "tested").strip().lower()
         return status if status in VALID_TEST_STATUSES else "tested"
+
+    def ensure_ghost_activity_file():
+        try:
+            os.makedirs(os.path.dirname(GHOST_ACTIVITY_PATH), exist_ok=True)
+            if not os.path.exists(GHOST_ACTIVITY_PATH):
+                with open(GHOST_ACTIVITY_PATH, "w", encoding="utf-8") as fh:
+                    json.dump(DEFAULT_GHOST_ACTIVITY, fh)
+            return GHOST_ACTIVITY_PATH
+        except OSError:
+            fallback_path = "/tmp/ghost_activity.json"
+            if not os.path.exists(fallback_path):
+                with open(fallback_path, "w", encoding="utf-8") as fh:
+                    json.dump(DEFAULT_GHOST_ACTIVITY, fh)
+            return fallback_path
+
+    def read_ghost_activity():
+        ghost_path = ensure_ghost_activity_file()
+        try:
+            with open(ghost_path, "r", encoding="utf-8") as fh:
+                payload = json.load(fh)
+            if not isinstance(payload, dict):
+                payload = {}
+        except (OSError, json.JSONDecodeError):
+            payload = {}
+        return {
+            "activity": str(payload.get("activity", DEFAULT_GHOST_ACTIVITY["activity"])),
+            "target": str(payload.get("target", DEFAULT_GHOST_ACTIVITY["target"])),
+            "status": str(payload.get("status", DEFAULT_GHOST_ACTIVITY["status"])),
+            "path": ghost_path,
+        }
+
+    def write_ghost_activity(activity_payload):
+        ghost_path = ensure_ghost_activity_file()
+        serialized = {
+            "activity": str(activity_payload.get("activity", DEFAULT_GHOST_ACTIVITY["activity"])),
+            "target": str(activity_payload.get("target", DEFAULT_GHOST_ACTIVITY["target"])),
+            "status": str(activity_payload.get("status", DEFAULT_GHOST_ACTIVITY["status"])),
+        }
+        with open(ghost_path, "w", encoding="utf-8") as fh:
+            json.dump(serialized, fh)
+        return {**serialized, "path": ghost_path}
 
     # Projects
     @app.get("/api/projects")
@@ -199,6 +242,21 @@ def create_app():
                 },
             }
         )
+
+    @app.get("/api/ghost-activity")
+    def get_ghost_activity():
+        return jsonify(read_ghost_activity())
+
+    @app.post("/api/ghost-activity")
+    def upsert_ghost_activity():
+        data = body()
+        if not isinstance(data, dict):
+            return jsonify({"error": "JSON object body is required"}), 400
+        try:
+            payload = write_ghost_activity(data)
+            return jsonify(payload)
+        except OSError as exc:
+            return jsonify({"error": f"Unable to write ghost activity: {exc}"}), 500
 
     @app.get("/api/search")
     def global_search():
