@@ -1,5 +1,8 @@
 import json
 import os
+import re
+import sys
+from pathlib import Path
 from collections import defaultdict
 from datetime import datetime, timezone
 
@@ -10,6 +13,9 @@ from models import Activity, Endpoint, Finding, Project, Session, Target, TestSt
 VALID_TEST_STATUSES = {"tested", "planned", "recommended", "finding"}
 DEFAULT_GHOST_ACTIVITY = {"activity": "Idle", "target": "", "status": "waiting"}
 GHOST_ACTIVITY_PATH = os.path.expanduser("~/workspace/ghost_activity.json")
+BOUNTY_CORE_PATH = Path.home() / "projects" / "bounty-core"
+DEFAULT_CORE_FAMILY = "web_bounty"
+DEFAULT_CORE_LANE = "web"
 
 
 def create_app():
@@ -86,6 +92,66 @@ def create_app():
         with open(ghost_path, "w", encoding="utf-8") as fh:
             json.dump(serialized, fh)
         return {**serialized, "path": ghost_path}
+
+    def _sanitize_core_program(program, default="ghost"):
+        safe = re.sub(r"[^a-z0-9_\-]+", "-", str(program or default).lower()).strip("-")
+        return safe or default
+
+    def _load_bounty_core():
+        try:
+            from bounty_core import add_finding
+            return add_finding, None
+        except Exception as first_error:
+            if BOUNTY_CORE_PATH.exists():
+                sys.path.insert(0, str(BOUNTY_CORE_PATH))
+                try:
+                    from bounty_core import add_finding
+                    return add_finding, None
+                except Exception as second_error:
+                    return None, second_error
+            return None, first_error
+
+    def _dashboard_finding_to_core(row, target, endpoint, data):
+        program = data.get("core_program") or data.get("program") or target.hostname or target.name
+        asset = endpoint.url if endpoint else target.hostname
+        return {
+            "program": _sanitize_core_program(program),
+            "family": data.get("family") or DEFAULT_CORE_FAMILY,
+            "lane": data.get("lane") or DEFAULT_CORE_LANE,
+            "type": data.get("type") or data.get("vuln_type") or "dashboard",
+            "status": data.get("core_status") or "raw",
+            "severity": row.severity,
+            "title": row.title,
+            "asset": asset,
+            "url": endpoint.url if endpoint and str(endpoint.url).startswith(("http://", "https://")) else "",
+            "summary": row.description or "Finding entered through the bounty-tools dashboard.",
+            "description": row.description or "",
+            "evidence": data.get("evidence") or [],
+            "repro_steps": data.get("repro_steps") or data.get("steps") or [],
+            "source_tool": "dashboard/dashboard.py",
+            "source_repo": "bounty-tools",
+            "agent": "bounty-tools.dashboard",
+        }
+
+    def _maybe_write_core_dashboard_finding(row, target, endpoint, data):
+        enabled = bool(data.get("write_core")) or os.environ.get("GHOST_DASHBOARD_WRITE_CORE", "").lower() in {"1", "true", "yes"}
+        if not enabled:
+            return None
+        add_finding, error = _load_bounty_core()
+        if add_finding is None:
+            return {"ok": False, "error": f"bounty-core unavailable: {error}"}
+        payload = _dashboard_finding_to_core(row, target, endpoint, data)
+        try:
+            result = add_finding(
+                payload,
+                program=payload["program"],
+                family=payload["family"],
+                lane=payload["lane"],
+            )
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+        stored = result.get("finding", {})
+        return {"ok": True, "is_new": result.get("is_new"), "identity": stored.get("identity"), "report_path": stored.get("report_path")}
 
     # Projects
     @app.get("/api/projects")
@@ -507,7 +573,11 @@ def create_app():
         row = Project(name=data["name"].strip(), description=data.get("description"))
         db.session.add(row)
         db.session.commit()
-        return jsonify(row.to_dict()), 201
+        payload = row.to_dict()
+        core_result = _maybe_write_core_dashboard_finding(row, target, ep, data)
+        if core_result is not None:
+            payload["core_result"] = core_result
+        return jsonify(payload), 201
 
     @app.get("/api/projects/<int:project_id>")
     def get_project(project_id):
@@ -633,6 +703,7 @@ def create_app():
         if not target or target.deleted_at:
             return jsonify({"error": "Target not found"}), 404
         endpoint_id = data.get("endpoint_id")
+        ep = None
         if endpoint_id:
             ep = get_or_404(Endpoint, int(endpoint_id))
             if not ep or ep.target_id != target.id:
@@ -648,7 +719,11 @@ def create_app():
         )
         db.session.add(row)
         db.session.commit()
-        return jsonify(row.to_dict()), 201
+        payload = row.to_dict()
+        core_result = _maybe_write_core_dashboard_finding(row, target, ep, data)
+        if core_result is not None:
+            payload["core_result"] = core_result
+        return jsonify(payload), 201
 
     # Sessions
     @app.get("/api/projects/<int:project_id>/sessions")
